@@ -1,0 +1,36 @@
+{
+    "id": "Ribbit Radio",
+    "name": "Ribbit Radio",
+    "short_name": "Ribbit",
+    "description": "Ribbit Radio Communication v0.1",
+    "display": "standalone",
+    "theme_color": "#106C2F",
+    "background_color": "#106C2F",
+    "icons":[
+        {
+            "src": "ribbiticon-32.png",
+            "sizes": "32x32",
+            "type": "image/png"
+        },
+        {
+            "src": "ribbiticon-64.png",
+            "sizes": "64x64",
+            "type": "image/png"
+        },
+        {
+            "src": "ribbiticon-128.png",
+            "sizes": "128x128",
+            "type": "image/png"
+        },
+        {
+            "src": "ribbiticon-256.png",
+            "sizes": "256x256",
+            "type": "image/png"
+        },
+        {
+            "src": "ribbiticon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}
