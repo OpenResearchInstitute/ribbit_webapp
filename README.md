@@ -2,7 +2,7 @@
 
 This is the official repo for the Ribbit Web App
 
-![Ribbit Icon](/ribbiticon-256.png)
+![Ribbit Icon](/ribbiticon-512.png)
 
 Welcome to the Ribbit Web App!
 
@@ -35,3 +35,21 @@ Monolithic files tend to get awkward to work with, but in this case I figured th
 ## PWA status
 
 Once some experimentation is done I'll add in the "install app" button to the settings panel. I'll also want to add an instructions page for general use as well as how to share the page. I'll be adding some of that functionality soon, I promise.
+
+### settings
+
+![settings](/media/settings.png)
+
+The settings panel still needs some work, there are some known bugs here.
+
+![settings](/media/chat.png)
+
+The chat window also requires some work, so if you have specific thoughts please create a new Issue.
+
+## Next Steps
+
+After addressing some of the simple CSS problems, I'll be creating a compact header system. Right now the character buffer being transmitted has a bunch of text taken up by the call sign and gps coordinates etc. Rather than use UTF-8 for all the characters it'll be simplified to a smaller character set and use many fewer bits to transmit the information.
+
+## Developer Info
+
+If you're interested in more regular updates I post regularly [here](https://ham.okita.ninja/)
