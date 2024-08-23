@@ -28,6 +28,31 @@
             "src": "ribbiticon-256.png",
             "sizes": "256x256",
             "type": "image/png"
+        },
+        {
+            "src": "apple-touch-icon-57x57.png",
+            "sizes": "57x57",
+            "type": "image/png"
+        },
+        {
+            "src": "apple-touch-icon-72x72.png",
+            "sizes": "72x72",
+            "type": "image/png"
+        },
+        {
+            "src": "apple-touch-icon-114x114.png",
+            "sizes": "114x114",
+            "type": "image/png"
+        },
+        {
+            "src": "apple-touch-icon-144x144.png",
+            "sizes": "144x144",
+            "type": "image/png"
+        },
+        {
+            "src": "apple-touch-icon-180x180.png",
+            "sizes": "180x180",
+            "type": "image/png"
         }
     ]
 }
