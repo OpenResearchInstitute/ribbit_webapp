@@ -1,12 +1,10 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
     <title>Ribbit</title>
-    <meta http-equiv="Content-Type" content="text/html" charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta id="extViewportMeta" name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+    <meta charset="UTF-8" />
+    <meta name="viewport" id="extViewportMeta" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-loadingpage" content="Ribbit Mobile App">
     <meta name="application-name" content="Ribbit Mobile App">
@@ -14,7 +12,11 @@
     <meta property="og:image" content="ribbiticon-512.png">
     <link rel="shortcut icon" href="./favicon.ico">
     <link rel="manifest" href="./ribbit.webmanifest">
-
+    <link rel="apple-touch-icon" sizes="57x57" href="apple-touch-icon-57x57.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="apple-touch-icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="apple-touch-icon-114x114.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="apple-touch-icon-144x144.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-180x180.png">
     <!-- embedded fonts -->
     <style>
         @font-face {
@@ -163,6 +165,8 @@
             background: var(--light-green);
             padding: 0.25rem;
         }
+
+
 
         @media screen and (orientation: landscape) {
 
@@ -687,6 +691,16 @@
                 const name = db.getItem('name');
                 if (!name) {
                     openSettings();
+                }
+                if ('serviceWorker' in navigator) {
+                    window.addEventListener('load', () => {
+                        navigator.serviceWorker.register('/service-worker.js')
+                            .then(registration => {
+                                console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                            }, err => {
+                                console.log('ServiceWorker registration failed: ', err);
+                            });
+                    });
                 }
             }
             init();
@@ -1328,7 +1342,7 @@
 
 
             // populate message element
-            
+
             if (name.length > 0 && callsign?.length > 0 && gridsquare.length > 0 && phone.length > 0) {
                 nameElement.innerText = `${name} [${callsign}] @${gridsquare} ${phone}`;
                 const callsignToColor = cs => {
@@ -1338,7 +1352,7 @@
                     const color = `hsl(${h}, 50%, 80%)`;
                     return color;
                 }
-                if(callsign) {
+                if (callsign) {
                     const color = callsignToColor(callsign);
                     console.log('setting color', color);
                     nameElement.style.background = color;
