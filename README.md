@@ -4,7 +4,7 @@ This is the official repo for the Ribbit Web App
 
 ![Ribbit Icon](/ribbiticon-512.png)
 
-Welcome to the Ribbit Web App!
+## Welcome to the Ribbit Web App!
 
 The Ribbit Web App is an open-source project developed by the Open Research Institute. It is designed for both developers and ham radio enthusiasts who are interested in exploring the source code that was presented at DEFCON.
 
@@ -13,6 +13,10 @@ With the Ribbit Web App, you can dive deep into the codebase and inspect every a
 By accessing the source code, you can gain insights into the innovative techniques and technologies used in the Ribbit Web App. You can also contribute to the project by submitting bug reports, suggesting improvements, or even submitting your own code enhancements.
 
 The code base is entirely written in the index.html file, the only external javascript file is the service-worker.js for caching files for off-line operation and the ribbit.wasm which listens to the microphone and decodes any incoming signals. There are also a bunch of icons that mobile devices seem to love.
+
+## Update 2024.09.05
+
+Thought I'd post an update to let folks know where things are at, I've been doing some tests with the [compact header](https://ham.okita.ninja/compact.html) building up some functions that will be included in the next update. Once this is done then the code will be integrated with ribbit as a part of sending out header information then the settings page will be updated to reflect the changes.
 
 ---
 
