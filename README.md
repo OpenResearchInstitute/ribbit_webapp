@@ -1,6 +1,6 @@
 # Ribbit Web App
 
-This is the official repo for the Ribbit Web App
+This is the official repo for the [Ribbit Web App](https://app.ribbitradio.org)
 
 ![Ribbit Icon](/ribbiticon-512.png)
 
