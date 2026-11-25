@@ -99,6 +99,68 @@
             height: 3rem;
         }
 
+        /* Station status bar. The words carry the meaning; colors and the
+           icon only reinforce it. All color pairs meet the 4.5:1 contrast
+           ratio from the Web Content Accessibility Guidelines. */
+        #status {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            min-height: 2.5rem;
+            padding: 0.25rem 1rem;
+            font-family: 'NotoSansDisplay-Medium';
+            font-size: 1.1rem;
+            background: #0B4D21;
+            color: #FFFFFF;
+            z-index: 1;
+        }
+
+        #status>#statusText {
+            white-space: normal;
+        }
+
+        #statusIcon {
+            flex: none;
+            width: 0.9rem;
+            height: 0.9rem;
+            border-radius: 50%;
+            border: 0.15rem solid currentColor;
+        }
+
+        #status.listening #statusIcon {
+            background: currentColor;
+        }
+
+        #status.transmitting {
+            background: #B3261E;
+            color: #FFFFFF;
+        }
+
+        #status.transmitting #statusIcon {
+            border-radius: 0;
+            background: currentColor;
+        }
+
+        #status.received {
+            background: #FFFFFF;
+            color: #0B4D21;
+            border-bottom: 0.15rem solid #0B4D21;
+        }
+
+        #status.received #statusIcon {
+            background: currentColor;
+        }
+
+        #status.warning {
+            background: #FFD54F;
+            color: #000000;
+        }
+
+        #status.warning #statusIcon {
+            border-radius: 0;
+            transform: rotate(45deg);
+        }
+
         #input {
             background: var(--dark-green);
             display: flex;
@@ -188,6 +250,46 @@
             }
         }
     </style>
+    <script type="text/javascript">
+        // Station status shown in the bar under the title.
+        // Each state has the words people see and a style class.
+        const STATION_STATES = {
+            starting:     { text: 'Starting up…',                         style: 'starting' },
+            listening:    { text: 'Listening',                            style: 'listening' },
+            tapToListen:  { text: 'Tap anywhere to start listening',      style: 'warning' },
+            transmitting: { text: 'Transmitting. Keep your radio keyed.', style: 'transmitting' },
+            received:     { text: 'Message received',                     style: 'received' },
+            micBlocked:   { text: 'Microphone blocked. Allow microphone access in your browser settings to receive messages.', style: 'warning' },
+            startFailed:  { text: 'Ribbit could not start. Reload the page to try again.', style: 'warning' }
+        };
+        let currentStationState = 'starting';
+        let receivedTimer = null;
+
+        const showStationState = () => {
+            const bar = document.getElementById('status');
+            if (!bar) { return; }  // page not built yet; shown on DOMContentLoaded
+            const state = STATION_STATES[currentStationState];
+            bar.className = state.style;
+            document.getElementById('statusText').textContent = state.text;
+        };
+
+        const setStatus = stateName => {
+            currentStationState = stateName;
+            showStationState();
+            // "Message received" shows briefly, then back to listening,
+            // unless something else has happened in the meantime.
+            clearTimeout(receivedTimer);
+            if (stateName === 'received') {
+                receivedTimer = setTimeout(() => {
+                    if (currentStationState === 'received') {
+                        setStatus('listening');
+                    }
+                }, 3000);
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', showStationState);
+    </script>
     <script type="text/javascript">
         // this is used to write the audio signal to a wav file.
         // should you want to play with this you can save out the file
@@ -612,6 +714,24 @@
                         }
                         wasmExports['digestFeed']();
                     }
+                    // Some browsers keep audio paused until the person taps
+                    // the screen. If so, say so, and start on the first tap.
+                    const showListeningState = () => {
+                        if (!listen) { return; }  // transmitting has priority
+                        setStatus(rx_context.state === 'running' ? 'listening' : 'tapToListen');
+                    };
+                    rx_context.onstatechange = showListeningState;
+                    showListeningState();
+                    const resumeListening = () => {
+                        if (rx_context.state === 'suspended') {
+                            rx_context.resume();
+                        }
+                    };
+                    document.addEventListener('pointerdown', resumeListening);
+                    document.addEventListener('keydown', resumeListening);
+                }).catch(error => {
+                    console.error('Microphone not available:', error);
+                    setStatus('micBlocked');
                 });
                 window.initEncoded = () => {
                     wasmExports['readEncoder']();
@@ -640,10 +760,15 @@
                     }
                     console.log(e, tx_context, signal, bufferSouce);
                     bufferSouce.connect(tx_context.destination);
+                    setStatus('transmitting');
                     bufferSouce.start();
-                    bufferSouce.onended = () => listen = true;
+                    bufferSouce.onended = () => {
+                        listen = true;
+                        setStatus('listening');
+                    };
                 };
                 window.fetchDecoded = result => {
+                    setStatus('received');
                     console.log('payload', _payload);
                     const decoder = new TextDecoder();
                     const str = decoder.decode(_payload);
@@ -698,6 +823,7 @@
             wasmExports['main']();
         }).catch(error => {
             console.error(error);
+            setStatus('startFailed');
         }).finally(() => {
             console.log('Ribbit is ready!');
         });
@@ -774,6 +900,11 @@
                 }
             </style>
         </div>
+    </div>
+    <!-- Station status: always visible, announced by screen readers -->
+    <div id="status" class="starting" role="status">
+        <span id="statusIcon" aria-hidden="true"></span>
+        <span id="statusText">Starting up…</span>
     </div>
     <div id="settings">
         <div class="setting">
