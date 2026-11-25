@@ -14,6 +14,10 @@ By accessing the source code, you can gain insights into the innovative techniqu
 
 The code base is entirely written in the index.html file, the only external javascript file is the service-worker.js for caching files for off-line operation and the ribbit.wasm which listens to the microphone and decodes any incoming signals. There are also a bunch of icons that mobile devices seem to love.
 
+## Update 2026.11.25
+
+https://app.ribbitradio.org is live over HTTPS, decodes phone to phone, and has all 9 files correctly cached, including the decoder, so it works offline. Please file an issue if you notice any bugs! Next step is a user interface review and accessibility testing. 
+
 ## Update 2024.09.05
 
 Thought I'd post an update to let folks know where things are at, I've been doing some tests with the [compact header](https://ham.okita.ninja/compact.html) building up some functions that will be included in the next update. Once this is done then the code will be integrated with ribbit as a part of sending out header information then the settings page will be updated to reflect the changes.
