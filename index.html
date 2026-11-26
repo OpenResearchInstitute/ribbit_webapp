@@ -59,6 +59,12 @@
             font-size: max(100%, 1.5svh);
         }
 
+        /* Placeholder text: dark gray on light green, about 5.9:1 contrast */
+        ::placeholder {
+            color: #3A3A3A;
+            opacity: 1;
+        }
+
         /* Visible focus ring for keyboard and switch users */
         button:focus-visible,
         textarea:focus-visible,
@@ -111,6 +117,7 @@
 
         #titlebar>#modeTitle {
             font-size: .75rem;
+            color: #FFFFFF;
             display: flex;
             justify-content: flex-end;
             align-items: center;
@@ -811,42 +818,98 @@
                 }
                 savewav.onclick = saveToWav;
 
-                navigator.mediaDevices.getUserMedia(mediaConstraints).then(stream => {
-                    const rx_context = new AudioContext({ sampleRate: 8000 });
-                    const source = rx_context.createMediaStreamSource(stream);
-                    const streamsize = 2048;
-                    const processor = rx_context.createScriptProcessor(streamsize, 1, 1);
-                    source.connect(processor);
-                    processor.connect(rx_context.destination);
-                    // process audio
-                    processor.onaudioprocess = (audio) => {
-                        const { inputBuffer, playbackTime, timeStamp } = audio;
-                        const { duration, length, sampleRate } = inputBuffer;
-                        const input = inputBuffer.getChannelData(0);
-                        for (let i = 0; i < length; i++) {
-                            _feed[i] = listen ? input[i] : 0;
-                        }
-                        wasmExports['digestFeed']();
+                // ---- Receiving: listen on the chosen microphone ----
+                // The saved choice is a device ID from the browser, or '' for
+                // the phone's default microphone. ("Default" is from older versions.)
+                const savedMicrophone = () => {
+                    const saved = window.localStorage.getItem('microphone') || '';
+                    return saved === 'Default' ? '' : saved;
+                };
+                let rx_context = null;   // audio processing for the microphone
+                let rx_stream = null;    // the microphone itself
+
+                // Some browsers keep audio paused until the person taps
+                // the screen. If so, say so, and start on the first tap.
+                const showListeningState = () => {
+                    if (!listen || !rx_context) { return; }  // transmitting has priority
+                    setStatus(rx_context.state === 'running' ? 'listening' : 'tapToListen');
+                };
+                const resumeListening = () => {
+                    if (rx_context && rx_context.state === 'suspended') {
+                        rx_context.resume();
                     }
-                    // Some browsers keep audio paused until the person taps
-                    // the screen. If so, say so, and start on the first tap.
-                    const showListeningState = () => {
-                        if (!listen) { return; }  // transmitting has priority
-                        setStatus(rx_context.state === 'running' ? 'listening' : 'tapToListen');
-                    };
-                    rx_context.onstatechange = showListeningState;
-                    showListeningState();
-                    const resumeListening = () => {
-                        if (rx_context.state === 'suspended') {
-                            rx_context.resume();
+                };
+                document.addEventListener('pointerdown', resumeListening);
+                document.addEventListener('keydown', resumeListening);
+
+                const stopListening = () => {
+                    if (rx_stream) { rx_stream.getTracks().forEach(track => track.stop()); }
+                    if (rx_context) { rx_context.close(); }
+                    rx_stream = null;
+                    rx_context = null;
+                };
+
+                const startListening = deviceId => {
+                    stopListening();
+                    const audio = { ...mediaConstraints.audio };
+                    if (deviceId) { audio.deviceId = { exact: deviceId }; }
+                    return navigator.mediaDevices.getUserMedia({ audio, video: false }).then(stream => {
+                        rx_stream = stream;
+                        rx_context = new AudioContext({ sampleRate: 8000 });
+                        const source = rx_context.createMediaStreamSource(stream);
+                        const streamsize = 2048;
+                        const processor = rx_context.createScriptProcessor(streamsize, 1, 1);
+                        source.connect(processor);
+                        processor.connect(rx_context.destination);
+                        // process audio
+                        processor.onaudioprocess = (audio) => {
+                            const { inputBuffer } = audio;
+                            const { length } = inputBuffer;
+                            const input = inputBuffer.getChannelData(0);
+                            for (let i = 0; i < length; i++) {
+                                _feed[i] = listen ? input[i] : 0;
+                            }
+                            wasmExports['digestFeed']();
                         }
-                    };
-                    document.addEventListener('pointerdown', resumeListening);
-                    document.addEventListener('keydown', resumeListening);
-                }).catch(error => {
-                    console.error('Microphone not available:', error);
-                    setStatus('micBlocked');
-                });
+                        rx_context.onstatechange = showListeningState;
+                        showListeningState();
+                        // Device names are only available once the
+                        // microphone is allowed, so fill the menu now.
+                        fillMicrophoneMenu();
+                    }).catch(error => {
+                        // The chosen microphone is gone (unplugged)? Use the default.
+                        const deviceMissing = error.name === 'OverconstrainedError' || error.name === 'NotFoundError';
+                        if (deviceId && deviceMissing) {
+                            console.warn('Chosen microphone not found; using the default.', error);
+                            return startListening('');
+                        }
+                        console.error('Microphone not available:', error);
+                        setStatus('micBlocked');
+                    });
+                };
+
+                // ---- The Microphone menu in settings ----
+                const fillMicrophoneMenu = () => {
+                    const menu = document.getElementById('microphone');
+                    return navigator.mediaDevices.enumerateDevices().then(devices => {
+                        const microphones = devices.filter(d => d.kind === 'audioinput'
+                            // Chrome adds "default" and "communications" entries
+                            // that repeat a real device; our first option covers default.
+                            && d.deviceId !== 'default' && d.deviceId !== 'communications');
+                        menu.replaceChildren(new Option('Phone default', ''));
+                        microphones.forEach((mic, index) => {
+                            menu.add(new Option(mic.label || `Microphone ${index + 1}`, mic.deviceId));
+                        });
+                        menu.value = savedMicrophone();
+                        if (menu.selectedIndex === -1) { menu.value = ''; }  // saved one is unplugged
+                    });
+                };
+                // Plugging in or removing a USB audio interface updates the menu
+                navigator.mediaDevices.addEventListener('devicechange', fillMicrophoneMenu);
+                // Saving settings with a different microphone switches to it
+                document.addEventListener('microphoneChanged', () => startListening(savedMicrophone()));
+
+                startListening(savedMicrophone());
                 window.initEncoded = () => {
                     wasmExports['readEncoder']();
                 };
@@ -969,6 +1032,13 @@
                             openSettings();
                         }
                     }
+                    // The parts of the app that sit behind the settings panel
+                    const setBehindSettingsInert = isInert => {
+                        ['status', 'chat', 'input'].forEach(id => {
+                            const element = document.getElementById(id);
+                            if (element) { element.inert = isInert; }
+                        });
+                    };
                     const openSettings = () => {
                         document.dispatchEvent(new CustomEvent('openSettings'));
                         const elements = document.getElementsByName('close');
@@ -989,6 +1059,11 @@
                         const menuButton = document.getElementById('menuButton');
                         menuButton.setAttribute('aria-expanded', 'true');
                         menuButton.setAttribute('aria-label', 'Close settings');
+                        // Only the settings panel (and the menu button to close it)
+                        // can be reached while it's open.
+                        document.getElementById('settings').inert = false;
+                        setBehindSettingsInert(true);
+                        document.getElementById('settingsTitle').focus();
                     }
                     const closeSettings = () => {
                         document.dispatchEvent(new CustomEvent('closeSettings'));
@@ -998,6 +1073,10 @@
                         const menuButton = document.getElementById('menuButton');
                         menuButton.setAttribute('aria-expanded', 'false');
                         menuButton.setAttribute('aria-label', 'Open settings');
+                        // Hidden panel can't be reached; the chat can again.
+                        document.getElementById('settings').inert = true;
+                        setBehindSettingsInert(false);
+                        menuButton.focus();
                     }
 
                 </script>
@@ -1037,17 +1116,20 @@
         <span id="statusIcon" aria-hidden="true"></span>
         <span id="statusText">Starting up…</span>
     </div>
-    <div id="settings">
+    <div id="settings" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" inert>
         <div class="setting">
-            <h1>Settings</h1>
+            <h1 id="settingsTitle" tabindex="-1">Settings</h1>
         </div>
+        <!-- Mode choice hidden until a second mode exists. Chat is the only
+             working mode; "QSO" (a two-way radio contact) is planned.
         <div class="setting">
             <label for="mode">Mode:</label>
             <select id="mode">
-                <option selected option="Chat">Chat</option>
-                <option option="QSO">QSO (Coming Soon...)</option>
+                <option selected>Chat</option>
+                <option>QSO (Coming Soon...)</option>
             </select>
         </div>
+        -->
         <div class="setting">
             <label for="name">Name:</label>
             <input id="name" type="text" required autocomplete="name">
@@ -1069,7 +1151,7 @@
             <input id="phone" type="tel" autocomplete="tel" aria-describedby="phoneHint">
         </div>
         <p id="phoneHint" class="settingHint">If you enter a phone number, it is sent with every message you transmit, and anyone listening can see it.</p>
-        <div class="setting">
+        <div class="setting" id="gpsRow">
             <button id="updateGPS" onclick="UpdateGPSPosition();">
                 Update GPS Position
                 <svg viewBox="0 0 8 11">
@@ -1167,16 +1249,20 @@
         <p id="gridsquareHint" class="settingHint">Optional. Your Maidenhead grid locator, 4 or 6 characters. Tap Update GPS Position to fill it in automatically.</p>
         <div class="setting">
             <label for="microphone">Microphone (Rx):</label>
-            <select id="microphone">
-                <option>Default</option>
+            <select id="microphone" aria-describedby="microphoneHint">
+                <option value="">Phone default</option>
             </select>
         </div>
+        <p id="microphoneHint" class="settingHint">Where Ribbit listens for incoming messages. Choose your USB radio interface here if you have one plugged in.</p>
+        <!-- Speaker choice hidden for now: most phones let Android decide
+             where sound goes, so Ribbit plays through the default output.
         <div class="setting">
             <label for="speaker">Speaker (Tx):</label>
             <select id="speaker">
-                <option>Default</option>
+                <option value="">Phone default</option>
             </select>
         </div>
+        -->
         <div class="setting">
             <label for="savemessages">Save Messages:</label>
             <input id="savemessages" checked type="checkbox">
@@ -1185,43 +1271,50 @@
             <label for="messagecount">Messages:</label>
             <input id="messagecount" type="text" style="width:5rem;" readonly value="0">
             <button id="clearmessages" style="width:auto;" onclick="showClearMessageConfirm();">Clear Messages</button>
-            <div id="clearMessagesConfirm">
+            <!-- A real dialog: holds keyboard focus, closes with Escape,
+                 and returns focus to the Clear Messages button -->
+            <dialog id="clearMessagesConfirm" aria-labelledby="clearMessagesTitle">
                 <div id="clearMessageContainer">
-                    <h2 style="text-align: center;">Clear All Messages?</h2>
+                    <h2 id="clearMessagesTitle" style="text-align: center;">Clear all messages?</h2>
+                    <p class="settingHint">This deletes every saved message on this device. It can't be undone.</p>
                     <div>
-                        <button onclick="confirmClearMessages();">Yes</button>
-                        <button onclick="hideClearMessageConfirm();">No</button>
+                        <button onclick="hideClearMessageConfirm();" autofocus>Keep them</button>
+                        <button onclick="confirmClearMessages();">Clear all</button>
                     </div>
                 </div>
-            </div>
+            </dialog>
             <style>
                 #clearmessages {
                     background: var(--light-green);
-                    color: var(--dark-green);
+                    color: #000000;
                     border-radius: var(--radius);
                     height: 3rem;
                 }
 
                 #clearMessagesConfirm {
-                    position: fixed;
-                    width: 100vw;
-                    height: 100vh;
-                    top: 0;
-                    left: 0;
+                    margin: auto;
+                    padding: 0;
+                    border: none;
+                    background: #0B4D21;
+                    color: #FFFFFF;
+                    width: min(90vw, 28rem);
+                    height: fit-content;
+                }
+
+                #clearMessagesConfirm::backdrop {
                     background: rgba(0, 0, 0, 0.75);
-                    justify-content: center;
-                    align-items: center;
-                    display: none;
                 }
 
                 #clearMessageContainer {
-                    background: var(--dark-green);
+                    background: #0B4D21;
                     display: flex;
                     flex-direction: column;
                     align-items: center;
                     height: auto;
-                    padding: 3svh;
-                    width: 40svw;
+                    padding: 1.5rem;
+                    gap: 1rem;
+                    width: 100%;
+                    box-sizing: border-box;
                 }
 
                 #clearMessageContainer>div {
@@ -1233,20 +1326,20 @@
 
                 #clearMessageContainer>div>button {
                     background: var(--light-green);
-                    font-family: 'NotoSansDisplay-Regular';
-                    margin: 1svh;
-                    width: -webkit-fill-available;
+                    color: #000000;
+                    font-family: 'NotoSansDisplay-Bold';
+                    margin: 0.5rem;
+                    flex: 1;
+                    border-radius: var(--radius);
                 }
             </style>
 
             <script type="text/javascript">
                 const showClearMessageConfirm = () => {
-                    const confirm = document.getElementById('clearMessagesConfirm');
-                    confirm.style.display = 'flex';
+                    document.getElementById('clearMessagesConfirm').showModal();
                 }
                 const hideClearMessageConfirm = () => {
-                    const confirm = document.getElementById('clearMessagesConfirm');
-                    confirm.style.display = 'none';
+                    document.getElementById('clearMessagesConfirm').close();
                 }
                 const confirmClearMessages = () => {
                     const chat = document.getElementById('chat');
@@ -1290,9 +1383,11 @@
         </div>
         <p id="settingsError" class="settingHint" role="alert"></p>
         <style>
+            /* Background is darker than the rest of the app so the
+               light-green labels reach 5.17:1 contrast (needs 4.5:1) */
             #settings {
                 color: var(--light-green);
-                background: var(--dark-green);
+                background: #0B4D21;
                 position: fixed;
                 padding-top: 3rem;
                 width: 100svw;
@@ -1370,7 +1465,7 @@
             .setting>input:enabled {
                 background: var(--light-green);
                 background-color: var(--light-green);
-                color: var(--dark-green);
+                color: #000000;
                 font-family: 'NotoSansDisplay-Regular';
                 padding: .5rem;
                 width: 50vw;
@@ -1410,11 +1505,28 @@
 
             .setting>.box {
                 display: flex;
-                gap: 1rem;
+                gap: 0.5rem;
                 justify-content: space-between;
                 align-items: center;
                 padding: 0;
                 width: 50svw;
+            }
+
+            /* GPS button on top, the two coordinates on a full-width line below */
+            #gpsRow {
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+
+            #gpsRow>.box {
+                width: 100%;
+            }
+
+            /* Latitude and longitude share the box equally */
+            .setting>.box>input {
+                flex: 1 1 0;
+                min-width: 0;
+                color: #000000;
             }
 
             .setting>.box>#latitude,
@@ -1494,9 +1606,8 @@
                 };
                 const gridsquare = document.getElementById('gridsquare').value;
                 const microphone = document.getElementById('microphone').value;
-                const speaker = document.getElementById('speaker').value;
                 const savemessages = document.getElementById('savemessages').checked;
-                console.log(name, callsign, phone, gps, gridsquare, savemessages, microphone, speaker);
+                console.log(name, callsign, phone, gps, gridsquare, savemessages, microphone);
                 const db = window.localStorage;
                 if (!db) {
                     console.error('Local Storage is not available.');
@@ -1508,9 +1619,12 @@
                 db.setItem('gridsquare', gridsquare);
                 db.setItem('phone', phone);
                 db.setItem('saveMessages', savemessages);
+                const microphoneChanged = (db.getItem('microphone') || '') !== microphone;
                 db.setItem('microphone', microphone);
-                db.setItem('speaker', speaker);
                 closeSettings();
+                if (microphoneChanged) {
+                    document.dispatchEvent(new CustomEvent('microphoneChanged'));
+                }
             }
             document.addEventListener('openSettings', e => {
                 const settings = document.getElementById('settings');
@@ -1535,7 +1649,6 @@
                 const phone = db.getItem('phone');
                 const gridsquare = db.getItem('gridsquare');
                 const microphone = db.getItem('microphone');
-                const speaker = db.getItem('speaker');
                 const gps = db.getItem('gps');
                 const { latitude, longitude } = JSON.parse(gps ? gps : '{}');
 
@@ -1545,8 +1658,11 @@
                 document.getElementById('latitude').value = latitude ? latitude : '';
                 document.getElementById('gridsquare').value = gridsquare ? gridsquare : '';
                 document.getElementById('phone').value = phone ? phone : '';
-                document.getElementById('microphone').value = microphone ? microphone : '';
-                document.getElementById('speaker').value = speaker ? speaker : '';
+                // Show the saved microphone; if it's unplugged (or from an
+                // older version), show "Phone default" rather than a blank.
+                const microphoneMenu = document.getElementById('microphone');
+                microphoneMenu.value = (microphone && microphone !== 'Default') ? microphone : '';
+                if (microphoneMenu.selectedIndex === -1) { microphoneMenu.value = ''; }
             });
             document.addEventListener('closeSettings', e => {
                 const settings = document.getElementById('settings');
@@ -1554,9 +1670,18 @@
             });
         </script>
     </div>
-    <div id="chat">
+    <!-- role="log": screen readers announce new messages as they arrive.
+         Announcing starts after saved messages are restored, so opening the
+         app doesn't read out the whole history. -->
+    <div id="chat" role="log" aria-label="Messages" aria-live="off">
     </div>
     <script type="text/javascript">
+        // Turn on screen reader announcements for the chat log. Called once
+        // saved messages are restored, with a fallback in case restoring fails.
+        const startAnnouncingMessages = () => {
+            document.getElementById('chat').setAttribute('aria-live', 'polite');
+        };
+        document.addEventListener('DOMContentLoaded', () => setTimeout(startAnnouncingMessages, 3000));
         // restore messages from localDB when DOM has loaded
         document.addEventListener('DOMContentLoaded', e => {
             console.log('DOM Loaded.', e);
@@ -1603,6 +1728,8 @@
                 }
                 const request = store.getAll();
                 request.onsuccess = e => {
+                    // after the restore below, start announcing new messages
+                    setTimeout(startAnnouncingMessages, 0);
                     const messages = e.target.result;
                     console.log('messages:', messages);
                     // update messagecounter
