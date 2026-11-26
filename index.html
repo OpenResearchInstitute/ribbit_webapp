@@ -4,7 +4,7 @@
 <head>
     <title>Ribbit</title>
     <meta charset="UTF-8" />
-    <meta name="viewport" id="extViewportMeta" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+    <meta name="viewport" id="extViewportMeta" content="width=device-width, initial-scale=1.0">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-loadingpage" content="Ribbit Mobile App">
     <meta name="application-name" content="Ribbit Mobile App">
@@ -45,21 +45,44 @@
             padding: 0;
             margin: 0;
             overflow: hidden;
-            font-size: 1.5svh;
             --light-green: #7FCF21;
             --middle-green: #509511;
             --dark-green: #106C2F;
             --radius: .25rem;
-            -webkit-text-size-adjust: none;
-            -moz-text-size-adjust: none;
-            -ms-text-size-adjust: none;
-            text-size-adjust: none;
         }
 
-        @media only screen and (max-device-width: 960px) {
-            body {
-                font-size: 2vh;
-            }
+        /* Text size follows the reader's own font size setting (100% = the
+           browser default, larger if they've asked for bigger text), and never
+           drops below 1.5% of the screen height. Every other size is in rem,
+           so the whole layout grows with it. */
+        :root {
+            font-size: max(100%, 1.5svh);
+        }
+
+        /* Visible focus ring for keyboard and switch users */
+        button:focus-visible,
+        textarea:focus-visible,
+        select:focus-visible,
+        input:focus-visible {
+            outline: 0.2rem solid #FFFFFF;
+            outline-offset: 0.1rem;
+        }
+
+        /* The two icon buttons: plain buttons with an icon inside */
+        .iconButton {
+            background: none;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius);
+        }
+
+        .iconButton>svg {
+            height: 100%;
+            width: 100%;
         }
 
         body {
@@ -183,8 +206,10 @@
             font-family: 'NotoSansDisplay-Regular';
         }
 
-        #input>svg {
+        #input>#encodebutton {
             height: 4rem;
+            width: 4rem;
+            flex: none;
         }
 
         #chat {
@@ -232,21 +257,23 @@
 
         @media screen and (orientation: landscape) {
 
-            :root,
-            * {
-                font-size: 2svh;
+            :root {
+                font-size: max(100%, 2svh);
             }
 
             #titlebar {
-                height: 3rem;
+                height: 3.5rem;
             }
+
+
 
             #input {
                 height: 5rem;
             }
 
-            #input>svg {
+            #input>#encodebutton {
                 height: 4rem;
+                width: 4rem;
             }
         }
     </style>
@@ -845,7 +872,9 @@
     <div id="titlebar">
         <b>Ribbit</b><i style="padding: 0vh 1vw;">v0.1.0</i>
         <div id="modeTitle"> CHAT
-            <svg viewBox="0 0 10 10" onclick="toggleSettings();">
+            <button id="menuButton" class="iconButton" onclick="toggleSettings();"
+                aria-label="Open settings" aria-expanded="false" aria-controls="settings">
+            <svg viewBox="0 0 10 10" aria-hidden="true" focusable="false">
                 <script type="text/javascript">
                     var settingsOpen = false;
                     const toggleSettings = () => {
@@ -872,12 +901,18 @@
                             }
                         }
                         settingsOpen = true;
+                        const menuButton = document.getElementById('menuButton');
+                        menuButton.setAttribute('aria-expanded', 'true');
+                        menuButton.setAttribute('aria-label', 'Close settings');
                     }
                     const closeSettings = () => {
                         document.dispatchEvent(new CustomEvent('closeSettings'));
                         const elements = document.getElementsByName('open');
                         elements.forEach(e => e.beginElement());
                         settingsOpen = false;
+                        const menuButton = document.getElementById('menuButton');
+                        menuButton.setAttribute('aria-expanded', 'false');
+                        menuButton.setAttribute('aria-label', 'Open settings');
                     }
 
                 </script>
@@ -896,9 +931,18 @@
                     <animate name="open" attributeName="y2" from="2" to="8" dur=".1s" repeatCount="0" fill="freeze" />
                 </line>
             </svg>
+            </button>
             <style>
-                #titlebar>#modeTitle>svg {
-                    height: 2rem;
+                #titlebar>#modeTitle>#menuButton {
+                    height: 2.75rem;
+                    width: 2.75rem;
+                }
+
+                @media screen and (orientation: landscape) {
+                    #titlebar>#modeTitle>#menuButton {
+                        height: 2.5rem;
+                        width: 2.5rem;
+                    }
                 }
             </style>
         </div>
@@ -1053,9 +1097,9 @@
             <input id="savemessages" checked type="checkbox">
         </div>
         <div class="setting">
-            <label for="messagecount" style="width:25svw;">Messages:</label>
-            <input id="messagecount" type="messagecount" style="width:25svw;" readonly value="0">
-            <button id="clearmessages" style="width:25svw;" onclick="showClearMessageConfirm();">Clear Messages</button>
+            <label for="messagecount">Messages:</label>
+            <input id="messagecount" type="text" style="width:5rem;" readonly value="0">
+            <button id="clearmessages" style="width:auto;" onclick="showClearMessageConfirm();">Clear Messages</button>
             <div id="clearMessagesConfirm">
                 <div id="clearMessageContainer">
                     <h2 style="text-align: center;">Clear All Messages?</h2>
@@ -1186,6 +1230,11 @@
                 height: 4rem;
             }
 
+            /* Rows keep their natural height; the panel scrolls instead */
+            #settings>* {
+                flex-shrink: 0;
+            }
+
             .setting {
                 display: flex;
                 padding: 0.5svh 1.5svw;
@@ -1212,8 +1261,17 @@
                 font-size: 1.25rem;
                 box-sizing: border-box;
                 border: none;
-                height: 3rem;
+                /* At least 3rem tall, but grow when larger text wraps */
+                min-height: 3rem;
+                height: auto;
                 border-radius: var(--radius);
+            }
+
+            .setting>#updateGPS>svg {
+                min-height: 0;
+                height: 2rem;
+                width: 2rem;
+                flex: none;
             }
 
             .setting>h2,
@@ -1609,9 +1667,11 @@
     </script>
     <div id="input">
         <textarea id="textarea" placeholder="Type a message" aria-label="Message"></textarea>
-        <svg id="encodebutton" viewBox="0 0 10 10" height="30">
-            <path d="m 1 4 l 1 0 l -1 -3 l 8 4 l -8 4 l 1 -3 l -1 0 z" fill="var(--light-green)" />
-        </svg>
+        <button id="encodebutton" class="iconButton" aria-label="Send message">
+            <svg viewBox="0 0 10 10" aria-hidden="true" focusable="false">
+                <path d="m 1 4 l 1 0 l -1 -3 l 8 4 l -8 4 l 1 -3 l -1 0 z" fill="var(--light-green)" />
+            </svg>
+        </button>
         <svg id="savewav" viewBox="0 0 10 10" height="30" style="display: none;">
             <rect width="10" height="10" rx="2" fill="var(--light-green)" />
         </svg>
