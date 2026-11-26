@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ribbit-cache-v7';  // bump on every release
+const CACHE_NAME = 'ribbit-cache-v8';  // bump on every release
 const urlsToCache = [
     '/',
     '/index.html',
