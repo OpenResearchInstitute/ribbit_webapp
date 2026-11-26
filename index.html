@@ -640,10 +640,12 @@
                         console.error('Local Storage is not available.');
                         return;
                     }
-                    const name = db.getItem('name');
-                    const callsign = db.getItem('callsign');
-                    const gridsquare = db.getItem('gridsquare');
-                    const phone = db.getItem('phone');
+                    // Missing values are sent as empty fields, never as "null".
+                    // The phone number is optional: if it's blank, no number goes out.
+                    const name = db.getItem('name') || '';
+                    const callsign = db.getItem('callsign') || '';
+                    const gridsquare = db.getItem('gridsquare') || '';
+                    const phone = (db.getItem('phone') || '').trim();
                     const header = `${name}|${callsign}|${gridsquare}|${phone}`;
                     const str = `${header}&=${messagebox.value}`;
 
@@ -813,8 +815,8 @@
                     console.error('Local Storage is not available.');
                     return;
                 }
-                const name = db.getItem('name');
-                if (!name) {
+                // Open settings on first launch, or if name or callsign is missing.
+                if (!db.getItem('name') || !db.getItem('callsign')) {
                     openSettings();
                 }
             }
@@ -919,12 +921,12 @@
         </div>
         <div class="setting">
             <label for="name">Name:</label>
-            <input id="name" type="text" required placeholder="John Doe">
+            <input id="name" type="text" required autocomplete="name">
         </div>
         <div class="setting">
-            <label for="callsign">Callsign:</label>
+            <label for="callsign">Station ID:</label>
             <!-- force callsign to be all uppercase -->
-            <input id="callsign" type="text" required placeholder="W1AW">
+            <input id="callsign" type="text" required autocapitalize="characters" autocomplete="off" aria-describedby="stationIdHint">
             <script type="text/javascript">
                 // force uppercase
                 document.getElementById('callsign').addEventListener('input', e => {
@@ -932,10 +934,12 @@
                 });
             </script>
         </div>
+        <p id="stationIdHint" class="settingHint">Your callsign, a tactical call sign, or another station ID. It's sent with every message.</p>
         <div class="setting">
-            <label for="phone">Phone:</label>
-            <input id="phone" type="tel" pattern="[+]{1}[0-9]{11,14}" required placeholder="1 (123) 456 - 7890">
+            <label for="phone">Phone (optional):</label>
+            <input id="phone" type="tel" autocomplete="tel" aria-describedby="phoneHint">
         </div>
+        <p id="phoneHint" class="settingHint">If you enter a phone number, it is sent with every message you transmit, and anyone listening can see it.</p>
         <div class="setting">
             <button id="updateGPS" onclick="UpdateGPSPosition();">
                 Update GPS Position
@@ -950,8 +954,8 @@
                 </svg>
             </button>
             <div class="box">
-                <input id="latitude" type="number" readonly placeholder="Latitude">
-                <input id="longitude" type="number" readonly placeholder="Longitude">
+                <input id="latitude" type="number" readonly placeholder="Latitude" aria-label="Latitude">
+                <input id="longitude" type="number" readonly placeholder="Longitude" aria-label="Longitude">
             </div>
             <script type="text/javascript">
                 UpdateGPSPosition = () => {
@@ -1029,8 +1033,9 @@
         </div>
         <div class="setting">
             <label for="gridsquare">Grid Square:</label>
-            <input id="gridsquare" type="text" required placeholder="FN42">
+            <input id="gridsquare" type="text" autocomplete="off" aria-describedby="gridsquareHint">
         </div>
+        <p id="gridsquareHint" class="settingHint">Optional. Your Maidenhead grid locator, 4 or 6 characters. Tap Update GPS Position to fill it in automatically.</p>
         <div class="setting">
             <label for="microphone">Microphone (Rx):</label>
             <select id="microphone">
@@ -1149,9 +1154,12 @@
             </script>
         </div>
         <div class="setting">
-            <button id="cancel" onclick="closeSettings();">EXIT WITHOUT SAVING</span></button>
-            <button id="close" onclick="saveSettings();">SAVE & CLOSE</button>
+            <!-- Labels are set when the panel opens: "Start using Ribbit" on
+                 first launch, "Save" and "Cancel" after that. -->
+            <button id="cancel" onclick="closeSettings();">Cancel</button>
+            <button id="close" onclick="saveSettings();">Save</button>
         </div>
+        <p id="settingsError" class="settingHint" role="alert"></p>
         <style>
             #settings {
                 color: var(--light-green);
@@ -1271,12 +1279,72 @@
                 background: var(--light-green);
                 width: -webkit-fill-available;
             }
+
+            /* Explanations under a field, and save errors */
+            .settingHint {
+                background: none;
+                color: #FFFFFF;
+                font-size: 1rem;
+                padding: 0 1.5svw 0.5rem;
+                white-space: normal;
+            }
+
+            #settingsError:empty {
+                display: none;
+            }
+
+            #settingsError {
+                background: #FFD54F;
+                color: #000000;
+                margin: 0 1.5svw;
+                padding: 0.5rem;
+                border-radius: var(--radius);
+            }
+
+            /* Save / Start: the main action. Black on light green = 10.85:1 contrast. */
+            .setting>#close {
+                background: var(--light-green);
+                color: #000000;
+                font-family: 'NotoSansDisplay-Bold';
+                border-radius: var(--radius);
+            }
+
+            /* Cancel: outlined, white text on dark green */
+            .setting>#cancel {
+                background: var(--dark-green);
+                color: #FFFFFF;
+                border: 0.15rem solid #FFFFFF;
+                border-radius: var(--radius);
+                margin-right: 1rem;
+            }
+
+            /* First launch: one full-width "Start using Ribbit" button */
+            .setting>#close.firstLaunch {
+                width: 100%;
+            }
         </style>
         <script type="text/javascript">
+            // Name and callsign identify your station on the air, so they're required.
+            const findMissingRequiredField = () => {
+                const required = [
+                    { id: 'name', label: 'your name' },
+                    { id: 'callsign', label: 'your station ID' }
+                ];
+                return required.find(field => document.getElementById(field.id).value.trim() === '');
+            };
+
             const saveSettings = () => {
-                const name = document.getElementById('name').value;
-                const callsign = document.getElementById('callsign').value;
-                const phone = document.getElementById('phone').value;
+                const errorBox = document.getElementById('settingsError');
+                const missing = findMissingRequiredField();
+                if (missing) {
+                    errorBox.textContent = `Please enter ${missing.label} before continuing.`;
+                    document.getElementById(missing.id).focus();
+                    return;
+                }
+                errorBox.textContent = '';
+                const name = document.getElementById('name').value.trim();
+                const callsign = document.getElementById('callsign').value.trim();
+                const phone = document.getElementById('phone').value.trim();
                 const gps = {
                     'longitude': document.getElementById('longitude').value,
                     'latitude': document.getElementById('latitude').value
@@ -1310,6 +1378,15 @@
                     console.error('Local Storage is not available.');
                     return;
                 }
+                // First launch: no station saved yet, so there's nothing to
+                // cancel back to. Show one "Start using Ribbit" button.
+                const firstLaunch = !db.getItem('name') || !db.getItem('callsign');
+                const saveButton = document.getElementById('close');
+                const cancelButton = document.getElementById('cancel');
+                saveButton.textContent = firstLaunch ? 'Start using Ribbit' : 'Save';
+                saveButton.classList.toggle('firstLaunch', firstLaunch);
+                cancelButton.hidden = firstLaunch;
+                document.getElementById('settingsError').textContent = '';
                 const name = db.getItem('name');
                 const callsign = db.getItem('callsign');
                 const phone = db.getItem('phone');
@@ -1414,10 +1491,13 @@
             console.log('sender:', sender);
             console.log('message:', message);
             console.log('timestamp:', timestamp);
-            const name = sender.split('|')[0];
-            const callsign = sender.split('|')[1];
-            const gridsquare = sender.split('|')[2];
-            const phone = sender.split('|')[3];
+            // sender is "name|callsign|gridsquare|phone"; any part may be empty.
+            // Status notices (like "Messages cleared") have no sender at all.
+            const senderParts = (sender || '').split('|');
+            const name = senderParts[0] || '';
+            const callsign = senderParts[1] || '';
+            const gridsquare = senderParts[2] || '';
+            const phone = senderParts[3] || '';
             console.log('name', name);
             console.log('callsign', callsign);
             console.log('gridsquare', gridsquare);
@@ -1475,8 +1555,12 @@
 
             // populate message element
 
-            if (name.length > 0 && callsign?.length > 0 && gridsquare.length > 0 && phone.length > 0) {
-                nameElement.innerText = `${name} [${callsign}] @${gridsquare} ${phone}`;
+            // A callsign is enough to show who sent it; add whatever else they included.
+            if (callsign.length > 0) {
+                let label = name.length > 0 ? `${name} [${callsign}]` : callsign;
+                if (gridsquare.length > 0) { label += ` @${gridsquare}`; }
+                if (phone.length > 0) { label += ` ${phone}`; }
+                nameElement.innerText = label;
                 const callsignToColor = cs => {
                     console.log('callsign:', cs);
                     const a = (cs.charCodeAt(0) * 11) + (cs.charCodeAt(1) * 7) + (cs.charCodeAt(2) * 3);
@@ -1493,7 +1577,8 @@
                 console.log(nameElement);
                 console.log(messageElement);
             } else {
-                nameElement.innerText = `unknown sender`;
+                // App notices (like "Messages cleared") come from Ribbit itself
+                nameElement.innerText = type === 'alert' ? 'Ribbit' : 'unknown sender';
             }
 
             chat.scrollTop = chat.scrollHeight;
@@ -1523,7 +1608,7 @@
         });
     </script>
     <div id="input">
-        <textarea id="textarea" placeholder="Enter Message Here."></textarea>
+        <textarea id="textarea" placeholder="Type a message" aria-label="Message"></textarea>
         <svg id="encodebutton" viewBox="0 0 10 10" height="30">
             <path d="m 1 4 l 1 0 l -1 -3 l 8 4 l -8 4 l 1 -3 l -1 0 z" fill="var(--light-green)" />
         </svg>
