@@ -916,10 +916,11 @@
                 window.readEncoded = e => {
                     const signal = tx_context.createBuffer(1, e, 8000);
                     const bufferSouce = tx_context.createBufferSource();
+                    // Fill in the samples BEFORE giving the buffer to the player.
+                    // Firefox copies the buffer at that moment, so samples written
+                    // afterward are never heard (Chrome doesn't care).
+                    signal.copyToChannel(_signalbuffer.slice(0, e), 0);
                     bufferSouce.buffer = signal;
-                    for (let i = 0; i < e; i++) {
-                        signal.getChannelData(0)[i] = _signalbuffer[i];
-                    }
                     listen = false;
                     if (savewavfile) {
                         savewavfile = false;
